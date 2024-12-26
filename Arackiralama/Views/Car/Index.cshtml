@@ -1,0 +1,280 @@
+@{
+    ViewData["Title"] = "Araçlar";
+    Layout = "~/Views/Shared/_adminLayout.cshtml";
+}
+
+<div class="container">
+    <h2>Araç Yönetimi</h2>
+    <button class="btn btn-primary mb-3" onclick="showAddModal()">Yeni Araç Ekle</button>
+    
+    <table id="carTable" class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Resim</th>
+                <th>Marka</th>
+                <th>Model</th>
+                <th>Yıl</th>
+                <th>Plaka</th>
+                <th>Günlük Ücret</th>
+                <th>Durum</th>
+                <th>İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+</div>
+
+<!-- Ekleme Modal -->
+<div class="modal fade" id="addCarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Araç Ekle</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="closeAddModal()">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addCarForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label>Marka</label>
+                        <select class="form-control" id="addBrandId" name="BrandId"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" class="form-control" id="addModel" name="Model" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Yıl</label>
+                        <input type="number" class="form-control" id="addYear" name="Year" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Plaka</label>
+                        <input type="text" class="form-control" id="addPlate" name="Plate" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Günlük Ücret</label>
+                        <input type="number" class="form-control" id="addDailyPrice" name="DailyPrice" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Durum</label>
+                        <select class="form-control" id="addIsAvailable" name="IsAvailable">
+                            <option value="true">Müsait</option>
+                            <option value="false">Müsait Değil</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Araç Resmi</label>
+                        <input type="file" class="form-control" id="addImageFile" name="imageFile" accept="image/*" required />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddModal()">İptal</button>
+                <button type="button" class="btn btn-primary" onclick="addCar()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Düzenleme Modal -->
+<div class="modal fade" id="editCarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Araç Düzenle</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="closeEditModal()">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editCarForm" enctype="multipart/form-data">
+                    <input type="hidden" id="editCarId" name="Id" />
+                    <div class="form-group">
+                        <label>Marka</label>
+                        <select class="form-control" id="editBrandId" name="BrandId"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" class="form-control" id="editModel" name="Model" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Yıl</label>
+                        <input type="number" class="form-control" id="editYear" name="Year" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Plaka</label>
+                        <input type="text" class="form-control" id="editPlate" name="Plate" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Günlük Ücret</label>
+                        <input type="number" class="form-control" id="editDailyPrice" name="DailyPrice" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Durum</label>
+                        <select class="form-control" id="editIsAvailable" name="IsAvailable">
+                            <option value="true">Müsait</option>
+                            <option value="false">Müsait Değil</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Araç Resmi</label>
+                        <input type="file" class="form-control" id="editImageFile" name="imageFile" accept="image/*" required />
+                    </div>
+                    <div id="currentImage" class="mt-2">
+                        <img src="" alt="Mevcut Resim" style="max-width: 200px;" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">İptal</button>
+                <button type="button" class="btn btn-primary" onclick="updateCar()">Güncelle</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            loadCars();
+            loadBrands();
+        });
+
+        function loadCars() {
+            $('#carTable').DataTable({
+                ajax: {
+                    url: '/Car/GetAll',
+                    dataSrc: ''
+                },
+                columns: [
+                    { 
+                        data: 'imagePath',
+                        render: function(data) {
+                            return data ? `<img src="${data}" alt="Araç Resmi" style="max-width: 100px;">` : 'Resim Yok';
+                        }
+                    },
+                    { data: 'brandName' },
+                    { data: 'model' },
+                    { data: 'year' },
+                    { data: 'plate' },
+                    { data: 'dailyPrice' },
+                    { 
+                        data: 'isAvailable',
+                        render: function(data) {
+                            return data ? 'Müsait' : 'Müsait Değil';
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function (data) {
+                            const carData = encodeURIComponent(JSON.stringify(data));
+                            return `<button class="btn btn-sm btn-warning" onclick="showEditModal('${carData}')">Düzenle</button> 
+                                    <button class="btn btn-sm btn-danger" onclick="deleteCar(${data.id})">Sil</button>`;
+                        }
+                    }
+                ]
+            });
+        }
+
+        function loadBrands() {
+            $.get('/Car/GetBrands', function(brands) {
+                $('#addBrandId, #editBrandId').empty();
+                brands.forEach(function(brand) {
+                    $('#addBrandId, #editBrandId').append(`<option value="${brand.id}">${brand.name}</option>`);
+                });
+            });
+        }
+
+        function showAddModal() {
+            $('#addCarForm')[0].reset();
+            $('#addCarModal').modal('show');
+        }
+
+        function closeAddModal() {
+            $('#addCarModal').modal('hide');
+        }
+
+        function showEditModal(carData) {
+            const car = JSON.parse(decodeURIComponent(carData));
+            $('#editCarId').val(car.id);
+            $('#editBrandId').val(car.brandId);
+            $('#editModel').val(car.model);
+            $('#editYear').val(car.year);
+            $('#editPlate').val(car.plate);
+            $('#editDailyPrice').val(car.dailyPrice);
+            $('#editIsAvailable').val(car.isAvailable.toString());
+            
+            if (car.imagePath) {
+                $('#currentImage').show().find('img').attr('src', car.imagePath);
+            } else {
+                $('#currentImage').hide();
+            }
+            
+            $('#editCarModal').modal('show');
+        }
+
+        function closeEditModal() {
+            $('#editCarModal').modal('hide');
+        }
+
+        function addCar() {
+            var formData = new FormData($('#addCarForm')[0]);
+            
+            $.ajax({
+                url: '/Car/Add',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        closeAddModal();
+                        $('#carTable').DataTable().ajax.reload();
+                        Swal.fire('Başarılı!', 'Araç başarıyla eklendi.', 'success');
+                    }
+                }
+            });
+        }
+
+        function updateCar() {
+            var formData = new FormData($('#editCarForm')[0]);
+            
+            $.ajax({
+                url: '/Car/Update',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        closeEditModal();
+                        $('#carTable').DataTable().ajax.reload();
+                        Swal.fire('Başarılı!', 'Araç başarıyla güncellendi.', 'success');
+                    }
+                }
+            });
+        }
+
+        function deleteCar(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu aracı silmek istediğinize emin misiniz?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, Sil!',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Car/Delete', { id: id }, function (response) {
+                        if (response.success) {
+                            $('#carTable').DataTable().ajax.reload();
+                            Swal.fire('Silindi!', 'Araç başarıyla silindi.', 'success');
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+} 

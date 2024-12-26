@@ -1,0 +1,160 @@
+@{
+    ViewData["Title"] = "Kiralama İşlemleri";
+    Layout = "~/Views/Shared/_adminLayout.cshtml";
+}
+
+<div class="container">
+    <h2>Kiralama İşlemleri</h2>
+    
+    <table id="rentalTable" class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Araç</th>
+                <th>Müşteri</th>
+                <th>Kiralama Tarihi</th>
+                <th>Dönüş Tarihi</th>
+                <th>Toplam Ücret</th>
+                <th>Durum</th>
+                <th>İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            loadRentals();
+        });
+
+        function loadRentals() {
+            $('#rentalTable').DataTable({
+                ajax: {
+                    url: '/Rental/GetAll',
+                    dataSrc: ''
+                },
+                columns: [
+                    { data: 'id' },
+                    { data: 'carInfo' },
+                    { data: 'userName' },
+                    {
+                        data: 'startDate',
+                        render: function(data) {
+                            return new Date(data).toLocaleDateString('tr-TR');
+                        }
+                    },
+                    {
+                        data: 'endDate',
+                        render: function(data) {
+                            return new Date(data).toLocaleDateString('tr-TR');
+                        }
+                    },
+                    { 
+                        data: 'totalPrice',
+                        render: function(data) {
+                            return `${data} ₺`;
+                        }
+                    },
+                    { 
+                        data: 'status',
+                        render: function(data) {
+                            let badge = '';
+                            switch(data) {
+                                case 0: // Pending
+                                    badge = '<span class="badge badge-warning">Onay Bekliyor</span>';
+                                    break;
+                                case 1: // Approved
+                                    badge = '<span class="badge badge-success">Onaylandı</span>';
+                                    break;
+                                case 2: // Rejected
+                                    badge = '<span class="badge badge-danger">Reddedildi</span>';
+                                    break;
+                                case 3: // Completed
+                                    badge = '<span class="badge badge-info">Tamamlandı</span>';
+                                    break;
+                            }
+                            return badge;
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function(data) {
+                            let buttons = '';
+                            
+                            if(data.status === 0) { // Bekleyen işlemler
+                                buttons += `
+                                    <button class="btn btn-success btn-sm" onclick="updateStatus(${data.id}, 1)">
+                                        <i class="fas fa-check"></i> Onayla
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="updateStatus(${data.id}, 2)">
+                                        <i class="fas fa-times"></i> Reddet
+                                    </button>`;
+                            }
+                            else if(data.status === 1 && !data.isCompleted) { // Onaylanmış ama tamamlanmamış
+                                buttons += `
+                                    <button class="btn btn-info btn-sm" onclick="completeRental(${data.id})">
+                                        <i class="fas fa-car"></i> Teslim Al
+                                    </button>`;
+                            }
+                            
+                            return buttons;
+                        }
+                    }
+                ],
+                order: [[0, 'desc']],
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Turkish.json'
+                }
+            });
+        }
+
+        function updateStatus(rentalId, status) {
+            const statusText = status === 1 ? 'onaylamak' : 'reddetmek';
+            
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: `Bu kiralama talebini ${statusText} istediğinize emin misiniz?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Rental/UpdateStatus', { id: rentalId, status: status }, function(response) {
+                        if(response.success) {
+                            $('#rentalTable').DataTable().ajax.reload();
+                            Swal.fire('Başarılı!', response.message, 'success');
+                        } else {
+                            Swal.fire('Hata!', response.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        function completeRental(rentalId) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: 'Aracı teslim almak istediğinize emin misiniz?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, Teslim Al',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Rental/CompleteRental', { id: rentalId }, function(response) {
+                        if(response.success) {
+                            $('#rentalTable').DataTable().ajax.reload();
+                            Swal.fire('Başarılı!', response.message, 'success');
+                        } else {
+                            Swal.fire('Hata!', response.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+} 

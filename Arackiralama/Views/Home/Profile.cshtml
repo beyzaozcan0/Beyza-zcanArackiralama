@@ -1,0 +1,212 @@
+@using System.Security.Claims
+@model IEnumerable<dynamic>
+
+<style>
+    .profile-header {
+        background: linear-gradient(135deg, #3498db, #2c3e50);
+        color: white;
+        padding: 3rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0 0 20px 20px;
+    }
+
+    .profile-info {
+        text-align: center;
+    }
+
+    .profile-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 60px;
+        background: #fff;
+        margin: 0 auto 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #3498db;
+    }
+
+    .rental-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 2rem;
+        padding: 1rem;
+    }
+
+    .rental-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .rental-image {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+    }
+
+    .rental-info {
+        padding: 1.5rem;
+    }
+
+    .rental-dates {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .rental-price {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #2ecc71;
+        margin-bottom: 1rem;
+    }
+
+    .rental-status {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .status-active {
+        background: #3498db;
+        color: white;
+    }
+
+    .status-completed {
+        background: #2ecc71;
+        color: white;
+    }
+
+    .days-left {
+        background: #f1c40f;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        display: inline-block;
+        margin-top: 0.5rem;
+    }
+
+    .no-rentals {
+        text-align: center;
+        padding: 3rem;
+        color: #7f8c8d;
+        font-size: 1.2rem;
+    }
+
+    .status-pending {
+        background: #f1c40f;
+        color: white;
+    }
+    .status-approved {
+        background: #3498db;
+        color: white;
+    }
+    .status-rejected {
+        background: #e74c3c;
+        color: white;
+    }
+    .status-completed {
+        background: #2ecc71;
+        color: white;
+    }
+</style>
+
+<div class="profile-header">
+    <div class="container">
+        <div class="profile-info">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <h2>@ViewBag.UserName</h2>
+            <p>@ViewBag.Email</p>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <h3 class="mb-4">Kiralama Geçmişim</h3>
+
+    @if (!Model.Any())
+    {
+        <div class="no-rentals">
+            <i class="fas fa-car fa-3x mb-3"></i>
+            <p>Henüz hiç araç kiralaması yapmadınız.</p>
+        </div>
+    }
+    else
+    {
+        <div class="rental-grid">
+            @foreach (var rental in Model)
+            {
+                <div class="rental-card">
+                    <img src="@(string.IsNullOrEmpty(rental.ImagePath) ? "/images/default-car.jpg" : rental.ImagePath)"
+                         alt="@rental.CarInfo"
+                         class="rental-image" />
+
+                    <span class="rental-status 
+                        @(rental.Status == RentalStatus.Pending ? "status-pending" : 
+                          rental.Status == RentalStatus.Approved ? "status-approved" :
+                          rental.Status == RentalStatus.Rejected ? "status-rejected" : 
+                          "status-completed")">
+                        @(rental.Status == RentalStatus.Pending ? "Onay Bekliyor" :
+                          rental.Status == RentalStatus.Approved ? "Onaylandı" :
+                          rental.Status == RentalStatus.Rejected ? "Reddedildi" :
+                          "Tamamlandı")
+                    </span>
+
+                    <div class="rental-info">
+                        <h4>@rental.CarInfo</h4>
+
+                        <div class="rental-dates">
+                            <div>
+                                <i class="fas fa-calendar-plus"></i>
+                                @Convert.ToDateTime(rental.StartDate).ToString("dd.MM.yyyy")
+                            </div>
+                            <div>
+                                <i class="fas fa-calendar-minus"></i>
+                                @Convert.ToDateTime(rental.EndDate).ToString("dd.MM.yyyy")
+                            </div>
+                        </div>
+
+                        <div class="rental-price">
+                            @rental.TotalPrice.ToString("N0") ₺
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+
+    <input type="hidden" id="currentUserId" value="@ViewBag.UserId" />
+    <input type="hidden" id="currentUserName" value="@ViewBag.UserName" />
+
+    <button onclick="startChat('@ViewBag.AdminId', '@ViewBag.AdminName')" class="chat-toggle">
+        <i class="fas fa-comments"></i>
+    </button>
+
+    <div class="chat-container chat-hidden">
+        <div class="chat-header">
+            <h3>Yetkili İle Konuş </h3>
+            <button onclick="document.querySelector('.chat-container').classList.add('chat-hidden')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="chat-messages"></div>
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>

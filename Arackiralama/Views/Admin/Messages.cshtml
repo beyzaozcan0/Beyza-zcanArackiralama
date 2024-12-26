@@ -1,0 +1,261 @@
+@{
+    ViewData["Title"] = "Mesajlar";
+    Layout = "~/Views/Shared/_adminLayout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Kullanıcı Listesi -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Konuşmalar</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group" id="conversationList">
+                        <!-- Konuşmalar buraya gelecek -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mesajlaşma Alanı -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0" id="chatTitle">Mesajlaşma</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chat-messages" style="height: 400px; overflow-y: auto;">
+                        <!-- Mesajlar buraya gelecek -->
+                    </div>
+                    <div class="chat-input-area mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="messageInput" placeholder="Mesajınızı yazın...">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" type="button" onclick="sendMessage()">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="currentUserId" value="@ViewBag.AdminId" />
+<input type="hidden" id="currentUserName" value="Admin" />
+<input type="hidden" id="selectedUserId" />
+
+@section Scripts {
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <script>
+        // Global değişkenler
+        let connection;
+        let currentUserId;
+        let selectedUserId;
+        let isConnected = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/chatHub")
+                .withAutomaticReconnect([0, 2000, 5000, 10000])
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            currentUserId = document.getElementById("currentUserId").value;
+            
+            async function start() {
+                try {
+                    await connection.start();
+                    console.log("SignalR Connected!");
+                    isConnected = true;
+                    await connection.invoke("JoinChat", currentUserId, "Admin");
+                    loadConversations();
+                } catch (err) {
+                    console.log(err);
+                    setTimeout(start, 5000);
+                }
+            }
+
+            connection.onclose(async () => {
+                isConnected = false;
+                await start();
+            });
+
+            start();
+
+            async function loadConversations() {
+                try {
+                    const response = await fetch('/Admin/GetUserConversations');
+                    const conversations = await response.json();
+                    const list = document.getElementById('conversationList');
+                    list.innerHTML = '';
+                    
+                    conversations.forEach(conv => {
+                        const div = document.createElement('div');
+                        div.className = 'list-group-item list-group-item-action';
+                        if(selectedUserId === conv.userId) {
+                            div.classList.add('active');
+                        }
+                        div.onclick = () => selectUser(conv.userId, conv.userName);
+                        
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-1">${conv.userName}</h6>
+                                <small>${new Date(conv.lastMessageTime).toLocaleTimeString()}</small>
+                            </div>
+                            <p class="mb-1">${conv.lastMessage}</p>
+                            ${conv.unreadCount > 0 ? 
+                                `<span class="badge badge-primary badge-pill">${conv.unreadCount}</span>` : ''}
+                        `;
+                        
+                        list.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error('Konuşmalar yüklenirken hata:', error);
+                }
+            }
+
+            async function selectUser(userId, userName) {
+                selectedUserId = userId;
+                document.getElementById('selectedUserId').value = userId;
+                document.getElementById('chatTitle').textContent = `Chat with ${userName}`;
+                
+                // Aktif konuşmayı vurgula
+                document.querySelectorAll('.list-group-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                event.currentTarget.classList.add('active');
+
+                if(isConnected) {
+                    await connection.invoke("LoadMessages", currentUserId, userId);
+                }
+            }
+
+            connection.on("ReceivePrivateMessage", function (senderId, message, timestamp) {
+                addMessageToChat(senderId, message, timestamp);
+                loadConversations();
+            });
+
+            connection.on("MessageSent", function (message, timestamp) {
+                addMessageToChat(currentUserId, message, timestamp);
+                loadConversations();
+            });
+
+            connection.on("LoadMessages", function (messages) {
+                const chatMessages = document.querySelector(".chat-messages");
+                chatMessages.innerHTML = '';
+                messages.forEach(msg => {
+                    addMessageToChat(msg.senderId, msg.content, msg.timestamp);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+
+            async function sendMessage() {
+                if (!isConnected || !selectedUserId) {
+                    console.log("Bağlantı yok veya kullanıcı seçilmedi");
+                    return;
+                }
+
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
+                
+                if (message) {
+                    try {
+                        await connection.invoke("SendPrivateMessage", currentUserId, selectedUserId, message);
+                        // Mesajı gönderdikten sonra UI'ı hemen güncelle
+                        addMessageToChat(currentUserId, message, new Date());
+                        input.value = '';
+                        await loadConversations();
+                    } catch (error) {
+                        console.error('Mesaj gönderilirken hata:', error);
+                    }
+                }
+            }
+
+            function addMessageToChat(senderId, message, timestamp) {
+                const chatMessages = document.querySelector(".chat-messages");
+                const messageDiv = document.createElement("div");
+                messageDiv.className = `message ${senderId === currentUserId ? 'message-sent' : 'message-received'}`;
+                
+                const time = new Date(timestamp).toLocaleTimeString();
+                messageDiv.innerHTML = `
+                    <div class="message-content">${message}</div>
+                    <small class="message-time">${time}</small>
+                `;
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // Global fonksiyonları tanımla
+            window.sendMessage = sendMessage;
+            window.selectUser = selectUser;
+
+            // Enter tuşu ile mesaj gönderme
+            document.getElementById('messageInput')?.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Her 10 saniyede bir konuşma listesini güncelle
+            setInterval(loadConversations, 10000);
+        });
+    </script>
+
+    <style>
+        .list-group-item.active {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+        }
+        
+        .message {
+            margin: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message-sent {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message-received {
+            background-color: #f8f9fa;
+            margin-right: auto;
+        }
+
+        .message-time {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        .chat-messages {
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .list-group-item {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+}
